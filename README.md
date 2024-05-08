@@ -8,7 +8,7 @@ using historical load actual and forecast values.
 ## Installation ##
 
 PLProb is available for installation on Linux-based operating systems such as Ubuntu as well as macOS. To install
-PGscen, first clone this repository at the latest release:
+PLProb, first clone this repository at the latest release:
 
 ```gh repo clone PrincetonUniversity/PLProb```
 
@@ -19,7 +19,7 @@ packages for PLProb:
 
 ```conda activate plprob```
 
-From within the same directory, complete installation of PGscen by running:
+From within the same directory, complete installation of PLProb by running:
 
 ```pip install .```
 
