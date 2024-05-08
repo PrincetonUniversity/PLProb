@@ -13,7 +13,7 @@ PGscen, first clone this repository at the latest release:
 ```gh repo clone PrincetonUniversity/PLProb```
 
 Next, navigate to the cloned directory to create and activate the conda environment containing the prerequisite
-packages for PGscen:
+packages for PLProb:
 
 ```conda env create -f environment.yml```
 
