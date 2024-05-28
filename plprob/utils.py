@@ -1,7 +1,8 @@
 """Utility functions for working with distributions and models created in R."""
 
 import warnings
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
+
 from rpy2.robjects.methods import RS4 as GPD
 
 import numpy as np
@@ -120,20 +121,28 @@ def standardize(table: pd.DataFrame,
     return avg, std, (table - avg) / std
 
 
-def gaussianize(df: pd.DataFrame, gpd: bool = False) -> Tuple[dict, pd.DataFrame]:
+def gaussianize(df: pd.DataFrame, 
+                dist_dict: Optional[dict]=None, 
+                gpd: bool = False) -> Tuple[dict, pd.DataFrame]:
     """Transform the data to fit a Gaussian distribution."""
 
     unif_df = pd.DataFrame(columns=df.columns, index=df.index)
-    dist_dict = dict()
+
+    if dist_dict == None:
+        dist_dict = dict()
+        fit_dist = True
+    else:
+        fit_dist = False
 
     for col in df.columns:
 
         data = np.ascontiguousarray(df[col].values)
 
-        if gpd:
-            dist_dict[col] = fit_gpd(data)
-        else:
-            dist_dict[col] = ECDF(data)
+        if fit_dist:
+            if gpd:
+                dist_dict[col] = fit_gpd(data)
+            else:
+                dist_dict[col] = ECDF(data)
 
         if tuple(dist_dict[col].rclass)[0][0:3] == 'gpd':
             unif_df[col] = np.array(Rsafd.pgpd(
