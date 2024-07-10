@@ -2,16 +2,5 @@ name: plprob
 channels:
   - conda-forge
 dependencies:
-  - python=3.8
-  - r-essentials=4.2
-  - r-qgraph
-  - r-glasso
-  - r-envstats
-  - r-robustbase
-  - r-rgl
-  - r-quantreg
-  - r-mvtnorm
-  - r-quadprog
-  - r-scatterplot3d
-  - r-tseries
-  - r-plot3d
+  - python=3.12.1
+  - scipy=1.11.4

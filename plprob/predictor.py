@@ -91,7 +91,7 @@ class PlPredictor:
         # will be generated were issued
         self.forecast_issue_time = (
             self.scen_start_time - pd.Timedelta(self.forecast_lead_hours,
-                                                unit='H')
+                                                unit='h')
             )
 
         # calculate the close of the window for which scenarios will be made
@@ -269,7 +269,7 @@ class PlPredictor:
         cp_count = pd.cut(self.scenarios.max(axis=1), 
                            cp_bins, 
                            labels=list(range(len(cp_bins) - 2, -1, -1)))
-        self.cp_prob = dict(cp_count.groupby(cp_count).count()[::-1].cumsum() / len(cp_count))
+        self.cp_prob = dict(cp_count.groupby(cp_count, observed=False).count()[::-1].cumsum() / len(cp_count))
         
         # Compute probabilities of peak hour
         peak_hour = self.scenarios.droplevel(axis=1,level=0).idxmax(axis=1)
