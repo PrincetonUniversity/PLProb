@@ -140,7 +140,7 @@ class PlModel:
         # will be generated were issued
         self.forecast_issue_time = (
             self.scen_start_time - pd.Timedelta(self.forecast_lead_hours,
-                                                unit='H')
+                                                unit='h')
             )
 
         # calculate the close of the window for which scenarios will be made
@@ -187,7 +187,7 @@ class PlModel:
             for issue_time, fcsts in hist_dfs['forecast'].groupby(
                     'Issue_time'):
                 fcst_start_time = issue_time + pd.Timedelta(
-                    self.forecast_lead_hours, unit='H')
+                    self.forecast_lead_hours, unit='h')
 
                 fcst_end_time = pd.Timedelta(self.forecast_resolution_in_minute
                                              * (self.num_of_horizons - 1),
@@ -293,20 +293,16 @@ class PlModel:
 
         """
         if self.num_of_assets == 1:
-            horizon_prec = graphical_lasso(self.gauss_df, self.num_of_horizons,
-                                           horizon_rho)
+            horizon_prec = graphical_lasso(self.gauss_df, self.num_of_horizons, horizon_rho)
             asset_prec = np.array([[1.0]])
 
         elif self.num_of_horizons == 1:
-            asset_prec = graphical_lasso(self.gauss_df, self.num_of_assets,
-                                         asset_rho)
+            asset_prec = graphical_lasso(self.gauss_df, self.num_of_assets, asset_rho)
             horizon_prec = np.array([[1.0]])
 
         else:
             asset_prec, horizon_prec = gemini(
-                self.gauss_df, self.num_of_assets, self.num_of_horizons,
-                asset_rho, horizon_rho
-                )
+                self.gauss_df, self.num_of_assets, self.num_of_horizons, asset_rho, horizon_rho)
 
         # compute covariance matrices
         asset_cov = np.linalg.inv(asset_prec)
