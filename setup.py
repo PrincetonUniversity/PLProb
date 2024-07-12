@@ -13,7 +13,7 @@ setuptools.setup(
     author='Xinshuo Yang, Amit Solomon',
     author_email='xy3134@princeton.edu, as3993@princeton.edu',
 
-    packages=['plprob'],
+    packages=setuptools.find_packages(),
     package_data={'plprob': ['../data/*/*.csv']},
 
     install_requires=['numpy', 'matplotlib', 'pandas', 'scipy==1.11.4',
