@@ -55,32 +55,70 @@ class GPDUpperTail(GPD):
             self.upper_par_ests           = upper_par_ests
             self.upper_converged          = upper_converged
       
-      def qgpd(self, p: np.ndarray) -> np.ndarray:
+
+      def qgpd(obj, p: np.ndarray) -> np.ndarray:
             p_orig = p.copy()
-            p.sort() #Ascending
+            p = np.sort(p)
+
             n = len(p)
             val = np.zeros(n, dtype=float)
             goodp = (p >= 0) & (p <= 1)
             val[~goodp] = nan
-            k = self.upper_par_ests["xi"]
-            if (not SHAPE_XI):
+            k = obj.upper_par_ests["xi"]
+            if not SHAPE_XI:
                   k =  - k
+            ndata = obj.n
+            u = obj.upper_threshold
 
-            u = self.upper_threshold
-
-            tempf = ecdf(self.data)
-            pu = np.percentile(tempf, u)
+            tempf = ECDF(obj.data)
+            pu = tempf(u)
             smallP = (p < pu) & goodp
+
+            #The following was creating NAs when the distribution had point masses
+            #I changed it to the empirical quantile function on 7/28/2021
+            #    smallX <- obj@data <= u
+            #    Xgrid <- seq(from=min(obj@data[smallX]), to = max(obj@data[smallX]), length=length(obj@data[smallX]))
+            #    smallQ  <- approxfun(tempf(Xgrid),Xgrid)
+            #    val[smallP] <- smallQ(p[smallP])
             
-            val[smallP] = np.quantile(self.data, p[smallP])
+            val[smallP] = np.quantile(obj.data, p[smallP])
             # Quantile function above the threshold    
-            quant = u + (self.upper_par_ests["lambda"] * (((1 - p[~smallP & goodp])/(1 - pu))**( - k) - 1))/k
+            quant = u + (obj.upper_par_ests["lambda"] * (((1 - p[~smallP & goodp])/(1 - pu))**( - k) - 1))/k
             val[(~smallP & goodp)] = quant
 
             val_orig = val.copy()
             val_orig[np.argsort(p_orig)] = val
             return val_orig
+
+
+      # #TODO: WORK HERE!!! ecdf PROBABLY NEEDS TO BE WRITTEN WITH ECDF, see 2tails pgpd.
+      # def qgpd(self, p: np.ndarray) -> np.ndarray:
+      #       p_orig = p.copy()
+      #       p.sort() #Ascending
+      #       n = len(p)
+      #       val = np.zeros(n, dtype=float)
+      #       goodp = (p >= 0) & (p <= 1)
+      #       val[~goodp] = nan
+      #       k = self.upper_par_ests["xi"]
+      #       if (not SHAPE_XI):
+      #             k =  - k
+
+      #       u = self.upper_threshold
+
+      #       tempf = ecdf(self.data)
+      #       pu = np.percentile(tempf, u)
+      #       smallP = (p < pu) & goodp
+            
+      #       val[smallP] = np.quantile(self.data, p[smallP])
+      #       # Quantile function above the threshold    
+      #       quant = u + (self.upper_par_ests["lambda"] * (((1 - p[~smallP & goodp])/(1 - pu))**( - k) - 1))/k
+      #       val[(~smallP & goodp)] = quant
+
+      #       val_orig = val.copy()
+      #       val_orig[np.argsort(p_orig)] = val
+      #       return val_orig
       
+
       def pgpd(self, x: np.ndarray) -> np.ndarray:
 
             x_orig = x.copy()
@@ -88,7 +126,7 @@ class GPDUpperTail(GPD):
 
             n = len(x)
             k = self.upper_par_ests["xi"]
-            if(~SHAPE_XI):
+            if(not SHAPE_XI):
                   k =  - k
             u = self.upper_threshold
             val = np.zeros(n, dtype=float)
@@ -108,6 +146,7 @@ class GPDUpperTail(GPD):
             val_orig = val.copy()
             val_orig[np.argsort(x_orig)] = val
             return val_orig
+
 
 class GPDLowerTail(GPD):
       """
@@ -163,6 +202,7 @@ class GPDLowerTail(GPD):
             p = 1 - tmpdist.pgpd(-p)
             return p
 
+
 class GPDTwoTails(GPD):
       """
       GPD two tails.
@@ -202,45 +242,54 @@ class GPDTwoTails(GPD):
                   lower_converged=lower_converged,
                   update_stats=False)
 
-      def qgpd(self, x: np.array) -> np.ndarray:
-            x_orig = x.copy()
-            x.sort() #Ascending
 
-            n = len(x)
-            val = np.zeros(n, dtype=float)
+      def qgpd(self, p: np.ndarray) -> np.ndarray:
+            p_orig = p.copy()	
+            p = np.sort(p)
+
+            N = len(p)
+            val = np.zeros(N, dtype=float)
+            goodp = (p >= 0) & (p <= 1)
+            val[~goodp] = nan
+
 
             tempf = ECDF(self.data)
-            midX = (self.lower_tail.lower_threshold <= x) & (x <= self.upper_tail.upper_threshold)
-            val[midX] = tempf(x[midX])
-
-            # this is the estimate of F in the tails:
             p_upper = tempf(self.upper_tail.upper_threshold)
             p_lower = tempf(self.lower_tail.lower_threshold)
-            # p_upper = np.percentile(tempf, self.upper_tail.upper_threshold)
-            # p_lower = np.percentile(tempf, self.lower_tail.lower_threshold)
+            midP = (p_lower <= p) & (p <= p_upper)
+            # midX = (self.lower_tail.lower_threshold <= self.data) & (self.data <= self.upper_tail.upper_threshold)
+            # Xgrid = np.linspace(min(self.data[midX]), max(self.data[midX]), len(self.data[midX]))
+            # Xgrid = seq(from=min(self.data[midX]), to = max(self.data[midX]), length=length(self.data[midX]))
+            #    midQ  <- approxfun(tempf(Xgrid),Xgrid)
+            #   this was changed on 7-31-2021 to
+            #    midQ  <- approxfun(tempf(Xgrid),Xgrid,yleft=obj@lower.threshold,yright=obj@upper.threshold,ties=mean)
+            #    val[midP] <- midQ(p[midP])
+            #   this was further changed on 8-10-2021 to the empirical quantile function to allow point masses in the center
+            
+            val[midP] = np.quantile(self.data, p[midP])
+            
+            # this is the estimate of the quantile function in the tails
+            upper_tail_x = (p > p_upper) & goodp
+            lower_tail_x = (p < p_lower) & goodp
 
-            upper_tail_x = x > self.upper_tail.upper_threshold
-            lower_tail_x = x < self.lower_tail.lower_threshold
             k = self.upper_tail.upper_par_ests["xi"]
-            if(~SHAPE_XI):
+            if not SHAPE_XI:
                   k =  - k
             a = self.upper_tail.upper_par_ests["lambda"]
             b = self.upper_tail.upper_threshold
-            val[upper_tail_x] = 1 - (1 - p_upper) * (1 + (k * (x[upper_tail_x] - b))/a)**(-1/k)
-            if(k < 0 and sum(x > b - a/k) > 0):
-                  val[x > b - a/k] = 1.
-            k = self.lower_tail.lower_par_ests["xi"]
-            if(~SHAPE_XI):
-                  k =  - k
+            val[upper_tail_x] = b + (a * (((1 - p[upper_tail_x])/(1 - p_upper))**( - k) -1))/k
 
+            k = self.lower_tail.lower_par_ests["xi"]
+            if not SHAPE_XI:
+                  k = - k
             a = self.lower_tail.lower_par_ests["lambda"]
             b = self.lower_tail.lower_threshold
-            val[lower_tail_x] = p_lower * (1 - (k * (x[lower_tail_x] - b))/a)**(-1/k)
-            if(k < 0 & sum(x < b + a/k) > 0):
-                  val[x < b + a/k] = 0
+            val[lower_tail_x] = b - (a * (((p[lower_tail_x])/(p_lower))**( - k) - 1))/k
+
             val_orig = val.copy()
-            val_orig[np.argsort(x_orig)] = val
+            val_orig[np.argsort(p_orig)] = val
             return val_orig
+
 
       def pgpd(self, x: np.ndarray) -> np.ndarray:
             x_orig = x.copy()
@@ -264,7 +313,7 @@ class GPDTwoTails(GPD):
             upper_tail_x = (x > self.upper_tail.upper_threshold)
             lower_tail_x = (x < self.lower_tail.lower_threshold)
             k = self.upper_tail.upper_par_ests["xi"]
-            if(~SHAPE_XI):
+            if not SHAPE_XI:
                   k =  - k
             a = self.upper_tail.upper_par_ests["lambda"]
             b = self.upper_tail.upper_threshold
@@ -273,8 +322,8 @@ class GPDTwoTails(GPD):
                   val[x > b - a/k] = 1.
 
             k = self.lower_tail.lower_par_ests["xi"]
-            if(~SHAPE_XI):
-                  k =  - k
+            if not SHAPE_XI:
+                  k = -k
 
             a = self.lower_tail.lower_par_ests["lambda"]
             b = self.lower_tail.lower_threshold
@@ -285,6 +334,7 @@ class GPDTwoTails(GPD):
             val_orig = val.copy()
             val_orig[np.argsort(x_orig)] = val
             return val_orig            
+
 
 def sample_LMOM(x):
       x = sorted(x)
@@ -311,6 +361,7 @@ def sample_LMOM(x):
       # val["tau_4"] = tau3
       val = [l1, l2, tau2, tau3]
       return val
+
 
 def gpd_lmom(lmom, location = nan, sample = nan):
       paramest = [nan]*3
@@ -347,6 +398,7 @@ def gpd_lmom(lmom, location = nan, sample = nan):
             paramest[2] = k
 
       return paramest
+
 
 def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
     
@@ -439,6 +491,7 @@ def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
 
       val = {"n": n, "data": sample, "param_est": paramest, "converged": fit.success}
       return val
+
 
 def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", lower_method = "ml", plot = True, *args):
       # returns an object of class "gpd". Used to be gpd.tail
