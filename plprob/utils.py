@@ -258,3 +258,15 @@ def split_forecasts_hist_future(forecast_df, timesteps,
         hist_index = forecast_df.Forecast_time < timesteps[0]
 
     return forecast_df[hist_index], forecast_df[~hist_index]
+
+
+def set_seed(obj):
+    """
+    This function sets an RNG seed to obj, if it has a seed set.
+    """
+
+    seed = getattr(obj, "seed", None)
+    if not seed:
+        return
+    np.random.seed(seed)
+    obj.seed += 1

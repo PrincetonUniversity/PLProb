@@ -9,7 +9,7 @@ from dateutil.relativedelta import relativedelta
 from typing import List, Dict, Set, Iterable, Optional
 
 from .model import get_asset_list, PlModel, PlError
-from plprob.utils import (qdist, gaussianize, graphical_lasso)
+from plprob.utils import (qdist, gaussianize, graphical_lasso, set_seed)
 from scipy.linalg import sqrtm
 from scipy.stats import norm
 
@@ -65,7 +65,7 @@ class PlPredictor:
                  hist_cps: List[int], 
                  forecast_resolution_in_minute: int = 60,
                  num_of_horizons: int = 24,
-                 forecast_lead_time_in_hour: int = 12) -> None:
+                 forecast_lead_time_in_hour: int = 12, seed: Optional[int] = None) -> None:
 
         # check that the dataframes with actual and forecast values are in the
         # right format, get the names of the assets they contain values for
@@ -116,6 +116,7 @@ class PlPredictor:
 
         self.cp_prob = dict()
         self.peak_hour_prob = dict()
+        self.seed = seed
 
     def fit(self,
             asset_rho: float, horizon_rho: float,
@@ -152,7 +153,7 @@ class PlPredictor:
                                  None, dev_index,
                                  self.forecast_resolution_in_minute,
                                  self.num_of_horizons,
-                                 self.forecast_lead_hours, use_gpd=use_gpd)
+                                 self.forecast_lead_hours, use_gpd=use_gpd, seed=self.seed)
 
         self.model.fit(asset_rho, horizon_rho)
 
@@ -287,7 +288,7 @@ class ConPlPredictor:
                  hist_cps: List[int], 
                  forecast_resolution_in_minute: int = 60,
                  num_of_horizons: int = 24,
-                 forecast_lead_time_in_hour: int = 12) -> None:
+                 forecast_lead_time_in_hour: int = 12, seed: Optional[int] = None) -> None:
 
         # check that the dataframes with actual and forecast values are in the
         # right format, get the names of the assets they contain values for
@@ -344,6 +345,7 @@ class ConPlPredictor:
 
         self.cp_prob = dict()
         self.peak_hour_prob = dict()
+        self.seed = seed
 
     def fit_model(self, rho: float, 
                        nearest_days: Optional[int] = None) -> None:
@@ -363,7 +365,7 @@ class ConPlPredictor:
                                  None, dev_index,
                                  self.forecast_resolution_in_minute,
                                  self.num_of_horizons,
-                                 self.forecast_lead_hours, use_gpd=use_gpd)
+                                 self.forecast_lead_hours, use_gpd=use_gpd, seed=self.seed)
 
         self.model.fit(1., rho)
 
@@ -436,6 +438,7 @@ class ConPlPredictor:
         sqrtcov = sqrtm(A @ cov @ A.T).real
         mu = C @ gauss_df.T.values
         
+        set_seed(self)
         arr = sqrtcov @ np.random.randn(2 * self.num_of_horizons, nscen) + mu
         
         cond_gauss_scen_df = pd.DataFrame(
