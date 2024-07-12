@@ -3,8 +3,6 @@
 import warnings
 from typing import Union, Tuple, Optional
 
-from rpy2.robjects.methods import RS4 as GPD
-
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
@@ -231,3 +229,15 @@ def split_forecasts_hist_future(forecast_df, timesteps,
         hist_index = forecast_df.Forecast_time < timesteps[0]
 
     return forecast_df[hist_index], forecast_df[~hist_index]
+
+
+def set_seed(obj):
+    """
+    This function sets an RNG seed to obj, if it has a seed set.
+    """
+
+    seed = getattr(obj, "seed", None)
+    if not seed:
+        return
+    np.random.seed(seed)
+    obj.seed += 1
