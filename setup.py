@@ -13,13 +13,13 @@ setuptools.setup(
     author='Xinshuo Yang, Amit Solomon',
     author_email='xy3134@princeton.edu, as3993@princeton.edu',
 
-    packages=setuptools.find_packages(),
+    packages=['plprob'],
     package_data={'plprob': ['../data/*/*.csv']},
 
     install_requires=['numpy', 'matplotlib', 'pandas', 'scipy==1.11.4',
                       'dill', 'statsmodels', 'cffi', 'jupyterlab',
                       'seaborn', 'openpyxl', 'geopandas',
-                      'scikit-learn', 'ipywidgets', 'astral', 'zstandard'],
+                      'scikit-learn', 'ipywidgets', 'astral', 'zstandard', 'notebook'],
     )
 
 
