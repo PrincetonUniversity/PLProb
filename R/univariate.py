@@ -542,7 +542,7 @@ def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", l
             xx = tmp_data[tmp_data>u]
             excess = xx - u
             gpd_est = gpd_ml(sample=excess, location=0)["param_est"]
-            return gpd_est[2]
+            return gpd_est["xi"]
       
       if plot and warn:
             warnings.warn("Plot is currently not supported: the flag plot=True is ignored.")
@@ -552,13 +552,13 @@ def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", l
 
       n = len(data)
       if (tail=="two" or tail=="upper") and isnan(upper):
-            tmp_data = sorted(data)
+            tmp_data = np.array(sorted(data))
             #l1 and l2 indeces don't need -1 because I believe the original R code needed +1
             l1 = tmp_data[int(l1_thresh*n)]
             l2 = tmp_data[int(l2_thresh*n)]
             x = np.linspace(l1, l2, x_samples)
             x = x[x<tmp_data[n-3]]
-            pretty_xis = quick_xi(x, tmp_data)
+            pretty_xis = np.array([quick_xi(u, tmp_data) for u in x])
             if sum(pretty_xis.flatten()>0)==0:
                   warning("The MLE estimate of the shape parameter xi for the upper tail is likely to be negative, so you should not fit a GPD to the upper tail", warn)
                   if (n <= 100/0.15):
@@ -572,13 +572,13 @@ def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", l
                   warning(f"In order to find a positive value for xi, the MLE estimate of the shape parameter xi for the upper tail was done with {sum(tmp_data.flatten()>upper)} data points", warn)
 
       if (tail=="two" or tail=="lower") and isnan(lower):
-            tmp_data = sorted(-data)
+            tmp_data = np.array(sorted(-data))
             #l1 and l2 indeces don't need -1 because I believe the original R code needed +1
             l1 = tmp_data[int(l1_thresh*n)]
             l2 = tmp_data[int(l2_thresh*n)]
             x = np.linspace(l1, l2, x_samples)
             x = x[x<tmp_data[n-3]]
-            pretty_xis = quick_xi(x, tmp_data)
+            pretty_xis = np.array([quick_xi(u, tmp_data) for u in x])
             if sum(pretty_xis.flatten()>0)==0:
                   warning("The MLE estimate of the shape parameter xi for the lower tail is likely to be negative, so you should not fit a GPD to the lower tail", warn)
                   
