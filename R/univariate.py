@@ -558,7 +558,7 @@ def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", l
             l2 = tmp_data[int(l2_thresh*n)]
             x = np.linspace(l1, l2, x_samples)
             x = x[x<tmp_data[n-3]]
-            pretty_xis = quick_xi(x)
+            pretty_xis = quick_xi(x, tmp_data)
             if sum(pretty_xis.flatten()>0)==0:
                   warning("The MLE estimate of the shape parameter xi for the upper tail is likely to be negative, so you should not fit a GPD to the upper tail", warn)
                   if (n <= 100/0.15):
@@ -578,7 +578,7 @@ def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", l
             l2 = tmp_data[int(l2_thresh*n)]
             x = np.linspace(l1, l2, x_samples)
             x = x[x<tmp_data[n-3]]
-            pretty_xis = quick_xi(x)
+            pretty_xis = quick_xi(x, tmp_data)
             if sum(pretty_xis.flatten()>0)==0:
                   warning("The MLE estimate of the shape parameter xi for the lower tail is likely to be negative, so you should not fit a GPD to the lower tail", warn)
                   
