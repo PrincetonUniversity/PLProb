@@ -545,7 +545,7 @@ class ConPlPredictor:
         cp_count = pd.cut(self.cond_scenarios.max(axis=1), 
                            cp_bins, 
                            labels=list(range(len(cp_bins) - 2, -1, -1)))
-        self.cp_prob = dict(cp_count.groupby(cp_count).count()[::-1].cumsum() / len(cp_count))
+        self.cp_prob = dict(cp_count.groupby(cp_count, observed=False).count()[::-1].cumsum() / len(cp_count))
         
         # Compute probabilities of peak hour
         peak_hour = self.cond_scenarios.droplevel(axis=1,level=0).idxmax(axis=1)
