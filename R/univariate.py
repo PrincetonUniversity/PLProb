@@ -10,6 +10,13 @@ from statsmodels.distributions.empirical_distribution import ECDF
 def ecdf(x):
       return np.array([percentileofscore(x, xi, kind='weak') for xi in x])
 
+def warning(msg: str, warn: bool = True):
+      """
+      This function prints a warning if warn is True.
+      """
+      if warn:
+            warnings.warn(msg)
+
 SHAPE_XI = True
 LL_DEFAULT = -10**10
 #Amit: All variable names lambda were renamed to lmbd; lambda is a reserved word in Python and cannot be used as an object's name.
@@ -56,42 +63,47 @@ class GPDUpperTail(GPD):
             self.upper_converged          = upper_converged
       
 
-      def qgpd(obj, p: np.ndarray) -> np.ndarray:
+      def qgpd(obj, p: np.ndarray, warn: bool = True) -> np.ndarray:
             p_orig = p.copy()
             p = np.sort(p)
 
             n = len(p)
             val = np.zeros(n, dtype=float)
             goodp = (p >= 0) & (p <= 1)
-            val[~goodp] = nan
+            if sum(goodp)<n:
+                  val[~goodp] = nan
+                  warning("NaNs are returned for values of the parameter p outside [0,1]", warn)
             k = obj.upper_par_ests["xi"]
-            if not SHAPE_XI:
-                  k =  - k
-            ndata = obj.n
-            u = obj.upper_threshold
+            if k<0:
+                  val = np.quantile(object.data, p)
+                  warning("The empirical quantile function is returned because the tail of the distribution is not treated as heavy since xi is negative", warn)
+            else:
+                  if not SHAPE_XI:
+                        k =  - k
+                  ndata = obj.n
+                  u = obj.upper_threshold
 
-            tempf = ECDF(obj.data)
-            pu = tempf(u)
-            smallP = (p < pu) & goodp
+                  tempf = ECDF(obj.data)
+                  pu = tempf(u)
+                  smallP = (p < pu) & goodp
 
-            #The following was creating NAs when the distribution had point masses
-            #I changed it to the empirical quantile function on 7/28/2021
-            #    smallX <- obj@data <= u
-            #    Xgrid <- seq(from=min(obj@data[smallX]), to = max(obj@data[smallX]), length=length(obj@data[smallX]))
-            #    smallQ  <- approxfun(tempf(Xgrid),Xgrid)
-            #    val[smallP] <- smallQ(p[smallP])
-            
-            val[smallP] = np.quantile(obj.data, p[smallP])
-            # Quantile function above the threshold    
-            quant = u + (obj.upper_par_ests["lambda"] * (((1 - p[~smallP & goodp])/(1 - pu))**( - k) - 1))/k
-            val[(~smallP & goodp)] = quant
+                  #The following was creating NAs when the distribution had point masses
+                  #I changed it to the empirical quantile function on 7/28/2021
+                  #    smallX <- obj@data <= u
+                  #    Xgrid <- seq(from=min(obj@data[smallX]), to = max(obj@data[smallX]), length=length(obj@data[smallX]))
+                  #    smallQ  <- approxfun(tempf(Xgrid),Xgrid)
+                  #    val[smallP] <- smallQ(p[smallP])
+                  
+                  val[smallP] = np.quantile(obj.data, p[smallP])
+                  # Estimate of the quantile function above the threshold
+                  quant = u + (obj.upper_par_ests["lambda"] * (((1 - p[~smallP & goodp])/(1 - pu))**( - k) - 1))/k
+                  val[(~smallP & goodp)] = quant
 
             val_orig = val.copy()
             val_orig[np.argsort(p_orig)] = val
             return val_orig
 
 
-      # #TODO: WORK HERE!!! ecdf PROBABLY NEEDS TO BE WRITTEN WITH ECDF, see 2tails pgpd.
       # def qgpd(self, p: np.ndarray) -> np.ndarray:
       #       p_orig = p.copy()
       #       p.sort() #Ascending
@@ -119,29 +131,35 @@ class GPDUpperTail(GPD):
       #       return val_orig
       
 
-      def pgpd(self, x: np.ndarray) -> np.ndarray:
+      def pgpd(self, x: np.ndarray, warn: bool = True) -> np.ndarray:
 
             x_orig = x.copy()
             x.sort() #Ascending
 
             n = len(x)
-            k = self.upper_par_ests["xi"]
-            if(not SHAPE_XI):
-                  k =  - k
-            u = self.upper_threshold
-            val = np.zeros(n, dtype=float)
-            small = (x <= u)
-
             tempf = ecdf(self.data)
-            val[small] = tempf(x[small])
-            # val[small] = np.percentile(tempf, x[small])
+            val = np.zeros(n, dtype=float)
+            k = self.upper_par_ests["xi"]
+            if k<0:
+                  val = tempf(x)
+                  warning("The empirical cdf is returned since the tail of the distribution is not treated as heavy because xi is negative", warn)
+            else:
+                  if(not SHAPE_XI):
+                        k =  - k
+                  u = self.upper_threshold
+                  
+                  small = (x <= u)
 
-            # this is the estimate of F above the threshold:
-            pu = tempf(u)
-            # pu = np.percentile(tempf, u)
-            valsm = 1 - (1 - pu) * (1 + (k * (x[~small] - u))/self.upper_par_ests["lambda"])**(-1/k)
-            valsm[((k * (x[~small] - u))/self.upper_par_ests["lambda"]) <= -1] = 1
-            val[~small] = valsm
+                  
+                  val[small] = tempf(x[small])
+                  # val[small] = np.percentile(tempf, x[small])
+
+                  # this is the estimate of F above the threshold:
+                  pu = tempf(u)
+                  # pu = np.percentile(tempf, u)
+                  valsm = 1 - (1 - pu) * (1 + (k * (x[~small] - u))/self.upper_par_ests["lambda"])**(-1/k)
+                  valsm[((k * (x[~small] - u))/self.upper_par_ests["lambda"]) <= -1] = 1
+                  val[~small] = valsm
 
             val_orig = val.copy()
             val_orig[np.argsort(x_orig)] = val
@@ -243,14 +261,16 @@ class GPDTwoTails(GPD):
                   update_stats=False)
 
 
-      def qgpd(self, p: np.ndarray) -> np.ndarray:
+      def qgpd(self, p: np.ndarray, warn: bool = True) -> np.ndarray:
             p_orig = p.copy()	
             p = np.sort(p)
 
             N = len(p)
             val = np.zeros(N, dtype=float)
             goodp = (p >= 0) & (p <= 1)
-            val[~goodp] = nan
+            if len(goodp)<N:
+                  val[~goodp] = nan
+                  warning("NaNs are returned for values of the parameter p outside [0,1]", warn)
 
 
             tempf = ECDF(self.data)
@@ -272,26 +292,38 @@ class GPDTwoTails(GPD):
             upper_tail_x = (p > p_upper) & goodp
             lower_tail_x = (p < p_lower) & goodp
 
+            # First the upper tail 
             k = self.upper_tail.upper_par_ests["xi"]
-            if not SHAPE_XI:
-                  k =  - k
-            a = self.upper_tail.upper_par_ests["lambda"]
-            b = self.upper_tail.upper_threshold
-            val[upper_tail_x] = b + (a * (((1 - p[upper_tail_x])/(1 - p_upper))**( - k) -1))/k
+            if k<0:
+                  val[upper_tail_x] = np.quantile(self.data, p[upper_tail_x])
+                  warning("The empirical quantile function is returned because the upper tail of the distribution is not treated as heavy since xi is negative", warn)
+            else:
+                  if not SHAPE_XI:
+                        k =  - k
+                  # Estimate of the quantile function above the threshold  
+                  a = self.upper_tail.upper_par_ests["lambda"]
+                  b = self.upper_tail.upper_threshold
+                  val[upper_tail_x] = b + (a * (((1 - p[upper_tail_x])/(1 - p_upper))**( - k) -1))/k
 
+            # Next the lower tail
             k = self.lower_tail.lower_par_ests["xi"]
-            if not SHAPE_XI:
-                  k = - k
-            a = self.lower_tail.lower_par_ests["lambda"]
-            b = self.lower_tail.lower_threshold
-            val[lower_tail_x] = b - (a * (((p[lower_tail_x])/(p_lower))**( - k) - 1))/k
+            if k<0:
+                  val[lower_tail_x] = np.quantile(self.data, p[lower_tail_x])
+                  warning("The empirical quantile function is returned because the lower tail of the distribution is not treated as heavy since xi is negative", warn)
+            else:
+                  if not SHAPE_XI:
+                        k = - k
+                  # this is the estimate of F below the threshold:
+                  a = self.lower_tail.lower_par_ests["lambda"]
+                  b = self.lower_tail.lower_threshold
+                  val[lower_tail_x] = b - (a * (((p[lower_tail_x])/(p_lower))**( - k) - 1))/k
 
             val_orig = val.copy()
             val_orig[np.argsort(p_orig)] = val
             return val_orig
 
 
-      def pgpd(self, x: np.ndarray) -> np.ndarray:
+      def pgpd(self, x: np.ndarray, warn: bool = True) -> np.ndarray:
             x_orig = x.copy()
             x.sort() #Ascending
 
@@ -312,24 +344,36 @@ class GPDTwoTails(GPD):
 
             upper_tail_x = (x > self.upper_tail.upper_threshold)
             lower_tail_x = (x < self.lower_tail.lower_threshold)
+            
+            # First the upper tail  
             k = self.upper_tail.upper_par_ests["xi"]
-            if not SHAPE_XI:
-                  k =  - k
-            a = self.upper_tail.upper_par_ests["lambda"]
-            b = self.upper_tail.upper_threshold
-            val[upper_tail_x] = 1 - (1 - p_upper) * (1 + (k * (x[upper_tail_x] - b))/a)**(-1/k)
-            if (k < 0 & (sum(x > b - a/k) > 0)):
-                  val[x > b - a/k] = 1.
+            if k<0:
+                  val[upper_tail_x] = tempf(x[upper_tail_x])
+                  warning("The empirical cdf is returned for the upper tail since the latter is not treated as heavy because xi is negative", warn)
+            else:
+                  if not SHAPE_XI:
+                        k =  - k
+                  # this is the estimate of F above the threshold when xi is positive
+                  a = self.upper_tail.upper_par_ests["lambda"]
+                  b = self.upper_tail.upper_threshold
+                  val[upper_tail_x] = 1 - (1 - p_upper) * (1 + (k * (x[upper_tail_x] - b))/a)**(-1/k)
+            # if (k < 0 & (sum(x > b - a/k) > 0)):
+            #       val[x > b - a/k] = 1.
 
+            # Next the lower tail
             k = self.lower_tail.lower_par_ests["xi"]
-            if not SHAPE_XI:
-                  k = -k
-
-            a = self.lower_tail.lower_par_ests["lambda"]
-            b = self.lower_tail.lower_threshold
-            val[lower_tail_x] = p_lower * (1 - (k * (x[lower_tail_x] - b))/a)**(-1/k)
-            if (k < 0 & sum(x < b + a/k) > 0):
-                  val[x < b + a/k] = 0
+            if k<0:
+                  val[lower_tail_x] = tempf(x[lower_tail_x])
+                  warning("The empirical cdf is returned for the lower tail since the latter is not treated as heavy because xi is negative", warn)
+            else:
+                  if not SHAPE_XI:
+                        k = -k
+                  # this is the estimate of F below the threshold:
+                  a = self.lower_tail.lower_par_ests["lambda"]
+                  b = self.lower_tail.lower_threshold
+                  val[lower_tail_x] = p_lower * (1 - (k * (x[lower_tail_x] - b))/a)**(-1/k)
+            # if (k < 0 & sum(x < b + a/k) > 0):
+            #       val[x < b + a/k] = 0
 
             val_orig = val.copy()
             val_orig[np.argsort(x_orig)] = val
@@ -419,15 +463,12 @@ def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
             
             x0 = [lmomest[1],lmomest[2]]
             def negative_log_likelihood(theta):
-                  # I use ll = -10^10 for the function "optim" does not
-                  # seem to like NA's or Inf
+                  # I use ll <- -10^10 to avoid NA's or Inf
                   k = theta[1]
                   lmbd = theta[0]
                   xsc = 1 - (k*(tempX_global))/lmbd
-                  # ll = NA
                   ll = LL_DEFAULT
                   if (sum(xsc < 0) > 0 or lmbd < 0):
-                        # ll = NA
                         ll = LL_DEFAULT
                   else:
                         ll = -tempN_global*np.log(lmbd) + (1/k - 1)*sum(np.log(xsc))
@@ -460,17 +501,14 @@ def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
                   if SHAPE_XI:  lmomest[2] = -lmomest[2]
 
             def negative_log_likelihood(theta):
-                  # I use ll = -10^10 for the function "optim" does not
-                  # seem to like NA's or Inf
+                  # I use ll <- -10^10 to avoid NA's or Inf
                   k = theta[2]
                   m = theta[0]
                   #Amit: lambda was renamed to lmbd; lambda is a reserved word in Python and cannot be used as an object's name.
                   lmbd = theta[1]
                   xsc = 1 - k*(tempX_global-m)/lmbd
-                  # ll = NA
                   ll = LL_DEFAULT
                   if (sum(xsc < 0) > 0):
-                  #      ll = NA
                         ll = LL_DEFAULT
                   else:
                         ll = -tempN_global*np.log(lmbd) + (1/k - 1)*sum(np.log(xsc))
@@ -493,34 +531,67 @@ def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
       return val
 
 
-def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", lower_method = "ml", plot = True, *args):
+def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", lower_method = "ml", plot = True, warn=True, *args):
       # returns an object of class "gpd". Used to be gpd.tail
       # Called "gpd.tail" to avoid confusion with McNeil's function "gpd"
       # Was "pot.1tail.est' and "pot.2tails.est" in EVANESCE
-      if plot:
+      l1_thresh = 0.6
+      l2_thresh = 0.98
+      x_samples = 30
+      def quick_xi(u, tmp_data):
+            xx = tmp_data[tmp_data>u]
+            excess = xx - u
+            gpd_est = gpd_ml(sample=excess, location=0)["param_est"]
+            return gpd_est[2]
+      
+      if plot and warn:
             warnings.warn("Plot is currently not supported: the flag plot=True is ignored.")
 
       if (not (tail=="upper" or tail=="lower" or tail=="two")):
-            raise ValueError("The parameter should be one of the character strings 'upper', 'lower' or 'two'") 
+            raise ValueError("The parameter tail should be one of the character strings 'upper', 'lower' or 'two'") 
 
       n = len(data)
-      sorted_data = sorted(data)
-      if(isnan(upper)):
-            if (n <= 150/0.15):
-                  uu1 = sorted_data[n - int(n * 0.15) - 1]
-                  uu2 = sorted_data[n - int(n * 0.15) - 2]
-                  upper = (uu1 + uu2)/2
+      if (tail=="two" or tail=="upper") and isnan(upper):
+            tmp_data = sorted(data)
+            #l1 and l2 indeces don't need -1 because I believe the original R code needed +1
+            l1 = tmp_data[int(l1_thresh*n)]
+            l2 = tmp_data[int(l2_thresh*n)]
+            x = np.linspace(l1, l2, x_samples)
+            x = x[x<tmp_data[n-3]]
+            pretty_xis = quick_xi(x)
+            if sum(pretty_xis.flatten()>0)==0:
+                  warning("The MLE estimate of the shape parameter xi for the upper tail is likely to be negative, so you should not fit a GPD to the upper tail", warn)
+                  if (n <= 100/0.15):
+                        uu1 = tmp_data[n - int(n * 0.15) - 1]
+                        uu2 = tmp_data[n - int(n * 0.15) - 2]
+                        upper = (uu1 + uu2)/2
+                  else:
+                        upper = tmp_data[n - 101]
             else:
-                  upper = sorted_data[n - 151]
+                  upper = np.mean(x[pretty_xis>0])
+                  warning(f"In order to find a positive value for xi, the MLE estimate of the shape parameter xi for the upper tail was done with {sum(tmp_data.flatten()>upper)} data points", warn)
 
-      if(isnan(lower)):
-            if(n <= 150/0.15):
-                  #Arrays in R are 1 indexed
-                  uu1 = sorted_data[int(n * 0.15) - 1]
-                  uu2 = sorted_data[int(n * 0.15)]
-                  lower = (uu1 + uu2)/2
+      if (tail=="two" or tail=="lower") and isnan(lower):
+            tmp_data = sorted(-data)
+            #l1 and l2 indeces don't need -1 because I believe the original R code needed +1
+            l1 = tmp_data[int(l1_thresh*n)]
+            l2 = tmp_data[int(l2_thresh*n)]
+            x = np.linspace(l1, l2, x_samples)
+            x = x[x<tmp_data[n-3]]
+            pretty_xis = quick_xi(x)
+            if sum(pretty_xis.flatten()>0)==0:
+                  warning("The MLE estimate of the shape parameter xi for the lower tail is likely to be negative, so you should not fit a GPD to the lower tail", warn)
+                  
+                  if n <= 100/0.15:
+                        #Arrays in R are 1 indexed
+                        uu1 = tmp_data[n - int(n * 0.15) - 1]
+                        uu2 = tmp_data[n - int(n * 0.15) - 2]
+                        lower = -(uu1 + uu2)/2
+                  else:
+                        lower = tmp_data[n-101]
             else:
-                  lower = sorted_data[149]
+                  lower = -np.mean(x[pretty_xis>0])
+                  warning(f"In order to find a positive value of xi, the MLE estimate of the shape parameter xi for the lower tail was done with {sum(tmp_data.flatten()>-lower)} data points", warn)
 
       if (tail == "two" or tail == "upper"):
             # Analysis of the upper tail!
@@ -533,7 +604,7 @@ def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", l
                   gpd_est = gpd_est_res["param_est"]
                   upper_converged = gpd_est_res["converged"]
                   if not upper_converged:
-                        warnings.warn(" MLE method for GPD did not converge for the upper tail. You can try to set the option upper.method = \"lmom\" for upper tail")
+                        warning(" MLE method for GPD did not converge for the upper tail. You can try to set the option upper.method = \"lmom\" for upper tail", warn)
             elif upper_method.lower() == "lmom":
                   lmom = sample_LMOM(upper_excess)
                   gpd_est = gpd_lmom(lmom, sample = upper_excess, location = 0)["param_est"]
@@ -557,7 +628,7 @@ def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", l
                   gpd_est = gpd_est_res["param_est"]
                   lower_converged = gpd_est_res["converged"]
                   if not lower_converged:
-                        warnings.warn(" MLE method for GPD did not converge for the lower tail. You can try to set the option lower.method = \"lmom\" for the lower tail")
+                        warning(" MLE method for GPD did not converge for the lower tail. You can try to set the option lower.method = \"lmom\" for the lower tail", warn)
 
             elif lower_method.lower() == "lmom":
                   gpd_est = gpd_lmom(sample = lower_excess, location = 0)["param_est"]
