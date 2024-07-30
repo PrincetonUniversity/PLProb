@@ -63,7 +63,7 @@ class GPDUpperTail(GPD):
             self.upper_converged          = upper_converged
       
 
-      def qgpd(obj, p: np.ndarray, warn: bool = True) -> np.ndarray:
+      def qgpd(obj, p: np.ndarray, warn: bool = False) -> np.ndarray:
             p_orig = p.copy()
             p = np.sort(p)
 
@@ -131,7 +131,7 @@ class GPDUpperTail(GPD):
       #       return val_orig
       
 
-      def pgpd(self, x: np.ndarray, warn: bool = True) -> np.ndarray:
+      def pgpd(self, x: np.ndarray, warn: bool = False) -> np.ndarray:
 
             x_orig = x.copy()
             x.sort() #Ascending
@@ -261,7 +261,7 @@ class GPDTwoTails(GPD):
                   update_stats=False)
 
 
-      def qgpd(self, p: np.ndarray, warn: bool = True) -> np.ndarray:
+      def qgpd(self, p: np.ndarray, warn: bool = False) -> np.ndarray:
             p_orig = p.copy()	
             p = np.sort(p)
 
@@ -323,7 +323,7 @@ class GPDTwoTails(GPD):
             return val_orig
 
 
-      def pgpd(self, x: np.ndarray, warn: bool = True) -> np.ndarray:
+      def pgpd(self, x: np.ndarray, warn: bool = False) -> np.ndarray:
             x_orig = x.copy()
             x.sort() #Ascending
 
@@ -468,7 +468,7 @@ def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
                   lmbd = theta[0]
                   xsc = 1 - (k*(tempX_global))/lmbd
                   ll = LL_DEFAULT
-                  if (sum(xsc < 0) > 0 or lmbd < 0):
+                  if (sum(xsc <= 0) > 0 or lmbd <= 0 or k == 0):
                         ll = LL_DEFAULT
                   else:
                         ll = -tempN_global*np.log(lmbd) + (1/k - 1)*sum(np.log(xsc))
@@ -531,7 +531,7 @@ def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
       return val
 
 
-def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", lower_method = "ml", plot = True, warn=True, *args):
+def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", lower_method = "ml", plot = True, warn = False, *args):
       # returns an object of class "gpd". Used to be gpd.tail
       # Called "gpd.tail" to avoid confusion with McNeil's function "gpd"
       # Was "pot.1tail.est' and "pot.2tails.est" in EVANESCE
