@@ -62,9 +62,9 @@ def fit_gpd(data: np.array) -> Union[R_PY.GPD, ECDF]:
         if upper and lower:
             return dist
         elif upper:
-            return R_PY.fit_gpd(data, tail='left', plot=False)
+            return R_PY.fit_gpd(data, tail='upper', plot=False)
         elif lower:
-            return R_PY.fit_gpd(data, tail='right', plot=False)
+            return R_PY.fit_gpd(data, tail='lower', plot=False)
         else:
             warnings.warn(f'no tail has been detected, using ECDF instead', RuntimeWarning)
             return ECDF(data)
@@ -155,7 +155,7 @@ def graphical_lasso(df: pd.DataFrame, m: int, rho: float):
     assert df.shape[1] == m, (
         "Expected a DataFrame with {} columns, got {}".format(m, df.shape[1]))
 
-    res = sklearn_graphical_lasso(df.cov().values, alpha=rho)
+    res = sklearn_graphical_lasso(df.cov().values, alpha=rho, max_iter=2000)
     return np.linalg.inv(res[0])
 
 
@@ -198,8 +198,8 @@ def gemini(df: pd.DataFrame,
     GA = XTX / np.sqrt(np.outer(WA, WA))
     GB = XXT / np.sqrt(np.outer(WB, WB))
 
-    rA = sklearn_graphical_lasso(GA.cov().values, alpha=pA)
-    rB = sklearn_graphical_lasso(GB.cov().values, alpha=pB)
+    rA = sklearn_graphical_lasso(GA.cov().values, alpha=pA, max_iter=2000)
+    rB = sklearn_graphical_lasso(GB.cov().values, alpha=pB, max_iter=2000)
     Arho = np.linalg.inv(rA[0])
     Brho = np.linalg.inv(rB[0])
     fact = np.sum(np.multiply(df.values, df.values)) / n

@@ -588,7 +588,7 @@ def fit_gpd(data, tail = "two", upper = nan, lower = nan, upper_method = "ml", l
                         uu2 = tmp_data[n - int(n * 0.15) - 2]
                         lower = -(uu1 + uu2)/2
                   else:
-                        lower = tmp_data[n-101]
+                        lower = -tmp_data[n-101]
             else:
                   lower = -np.mean(x[pretty_xis>0])
                   warning(f"In order to find a positive value of xi, the MLE estimate of the shape parameter xi for the lower tail was done with {sum(tmp_data.flatten()>-lower)} data points", warn)
