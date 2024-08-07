@@ -155,7 +155,7 @@ def graphical_lasso(df: pd.DataFrame, m: int, rho: float):
     assert df.shape[1] == m, (
         "Expected a DataFrame with {} columns, got {}".format(m, df.shape[1]))
 
-    res = sklearn_graphical_lasso(df.cov().values, alpha=rho, max_iter=2000)
+    res = sklearn_graphical_lasso(df.cov().values, alpha=rho, tol=1e-2, max_iter=2000)
     return np.linalg.inv(res[0])
 
 
@@ -198,8 +198,8 @@ def gemini(df: pd.DataFrame,
     GA = XTX / np.sqrt(np.outer(WA, WA))
     GB = XXT / np.sqrt(np.outer(WB, WB))
 
-    rA = sklearn_graphical_lasso(GA.cov().values, alpha=pA, max_iter=2000)
-    rB = sklearn_graphical_lasso(GB.cov().values, alpha=pB, max_iter=2000)
+    rA = sklearn_graphical_lasso(GA.cov().values, alpha=pA, tol=1e-2, max_iter=2000)
+    rB = sklearn_graphical_lasso(GB.cov().values, alpha=pB, tol=1e-2, max_iter=2000)
     Arho = np.linalg.inv(rA[0])
     Brho = np.linalg.inv(rB[0])
     fact = np.sum(np.multiply(df.values, df.values)) / n

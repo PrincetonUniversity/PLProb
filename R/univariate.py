@@ -444,7 +444,7 @@ def gpd_lmom(lmom, location = nan, sample = nan):
       return paramest
 
 
-def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
+def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6, warn: bool = False):
     
       n = len(sample)
       lmomest = init_est  
@@ -482,7 +482,7 @@ def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
                   x0[0] = 0.5 * tempMean * (CV+ 1)
                   x0[1] = 0.5 *(CV - 1)
                   fit = minimize(negative_log_likelihood, x0, method="Nelder-Mead", options={"maxiter": 200})
-                  if (not fit.success):
+                  if (not fit.success and warn):
                         warnings.warn("Maximum Likelihood Method for the GPD did not converge")              
 
             paramest = dict()
@@ -515,7 +515,7 @@ def gpd_ml(sample, location = nan, init_est = nan, epsilon = 1e-6):
                   return -ll
 
             fit = minimize(negative_log_likelihood, lmomest, method="L-BFGS-B", bounds = [(-inf, min(tempX_global)), (0, inf), (-inf, inf)])
-            if not fit.success:
+            if not fit.success and warn:
                   warnings.warn("Maximum Likelihood Method for the GPD did not converge")
 
             paramest = dict()
