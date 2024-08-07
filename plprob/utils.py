@@ -3,78 +3,68 @@
 import warnings
 from typing import Union, Tuple, Optional
 
-from rpy2.robjects.methods import RS4 as GPD
-
 import numpy as np
 import pandas as pd
-
+from scipy.interpolate import interp1d
+from scipy.stats import ecdf
+from sklearn.covariance import graphical_lasso as sklearn_graphical_lasso
 from scipy.stats import norm
-from rpy2.robjects.packages import importr
-import rpy2.robjects as robjects
-import rpy2.robjects.numpy2ri
-rpy2.robjects.numpy2ri.activate()
 
-# import R packages
-base = importr('base')
-Rsafd = importr('Rsafd')
-glasso = importr('glasso')
-stats = importr('stats')
+import R.univariate as R_PY
 
 
 class ECDF:
     """
     class object to store emperical CDF (ECDF)
     """
-
     def __init__(self, data: np.array, n: int = 1000) -> None:
         self.rclass = ['ecdf']
         self.data = data
-        self.ecdf = stats.ecdf(robjects.FloatVector(data))
-
-        quants = robjects.FloatVector(np.linspace(0, 1, n + 1))
-        self.approxfun = stats.approxfun(quants,
-                                         stats.quantile(self.ecdf, quants))
+        # self.ecdf = ecdf(data)
+        quants = np.linspace(0, 1, n + 1)
+        self.ecdf = np.quantile(data, quants)
+        self.approxfun = interp1d(quants, self.ecdf)
 
     def quantfun(self, data: np.array) -> np.array:
         return self.approxfun(data)
 
-def qgpd(dist: GPD, x: np.array) -> np.array:
+def qgpd(dist: R_PY.GPD, x: np.array) -> np.array:
     """Wrapper for Rsafd qgpd function; gets quantiles at all values in x."""
 
     try:
-        return np.array(Rsafd.qgpd(dist, robjects.FloatVector(x)))
+        return dist.qgpd(x)
+        # return np.array(Rsafd.qgpd(dist, robjects.FloatVector(x)))
 
     except:
         # compute quantiles using PDF
-        ll = min(dist.slots['data'])
-        rr = max(dist.slots['data'])
+        ll = min(dist.data)
+        rr = max(dist.data)
         xx = np.linspace(ll, rr, 1001)
 
-        # rule=2 for extrapolation of values outside min and max
-        ff = stats.approxfun(Rsafd.pgpd(dist, xx), xx, rule=2)
+        # # rule=2 for extrapolation of values outside min and max
+        # ff = stats.approxfun(Rsafd.pgpd(dist, xx), xx, rule=2)
+        ff = interp1d(dist.pgpd(xx), xx, fill_value = (ll, rr))
 
         return ff(x)
 
 
-def fit_gpd(data: np.array) -> Union[GPD, ECDF]:
+def fit_gpd(data: np.array) -> Union[R_PY.GPD, ECDF]:
     """Fit a GPD if possible (fitting converge), otherwise use emperical distribution function."""
 
     try:
         ## try fit two tails
-        dist = Rsafd.fit_gpd(robjects.FloatVector(data),
-                                    tail='two', plot=False)
+        dist = R_PY.fit_gpd(data, tail='two', plot=False)
+        upper = dist.upper_tail.upper_converged
+        lower = dist.lower_tail.lower_converged
 
-        upper = dist.slots['upper.converged'][0]
-        lower = dist.slots['lower.converged'][0]
+
 
         if upper and lower:
             return dist
         elif upper:
-            return Rsafd.fit_gpd(robjects.FloatVector(data),
-                                    tail='left', plot=False)
+            return R_PY.fit_gpd(data, tail='upper', plot=False)
         elif lower:
-            return Rsafd.fit_gpd(robjects.FloatVector(data),
-                                    tail='right', plot=False)
+            return R_PY.fit_gpd(data, tail='lower', plot=False)
         else:
             warnings.warn(f'no tail has been detected, using ECDF instead', RuntimeWarning)
             return ECDF(data)
@@ -83,26 +73,19 @@ def fit_gpd(data: np.array) -> Union[GPD, ECDF]:
         warnings.warn(f'unable to fit GPD, using ECDF instead', RuntimeWarning)
         return ECDF(data)
 
-def qdist(dist: Union[GPD, ECDF], x: np.array, gpd_max_extension: float=0.15) -> np.array:
+
+def qdist(dist: Union[R_PY.GPD, ECDF], x: np.array, gpd_max_extension: float=0.15) -> np.array:
     """Compute the quantiles of the distribution.
     If input distribution is GPD, output will be clipped. 
     """
-
-    if tuple(dist.rclass)[0][0:3] == 'gpd':
-        # GPD
-        data_min, data_max = np.min(dist.slots['data']), np.max(dist.slots['data'])
+    
+    if hasattr(dist, "qgpd"):
+        data_min, data_max = np.min(dist.data), np.max(dist.data)
         clip_min = data_min - gpd_max_extension * (data_max - data_min)
         clip_max = data_max + gpd_max_extension * (data_max - data_min)
-
         return np.clip(qgpd(dist, x), clip_min, clip_max)
-
-    elif tuple(dist.rclass)[0] == 'ecdf':
-        # Empirical CDF
-        return stats.quantile(dist.ecdf, robjects.FloatVector(x))
-
     else:
-        raise RuntimeError(
-            "Unrecognized distribution class {}".format(tuple(dist.rclass)))
+        return np.quantile(dist.ecdf, x)
 
 
 def standardize(table: pd.DataFrame,
@@ -144,20 +127,16 @@ def gaussianize(df: pd.DataFrame,
             else:
                 dist_dict[col] = ECDF(data)
 
-        if tuple(dist_dict[col].rclass)[0][0:3] == 'gpd':
-            unif_df[col] = np.array(Rsafd.pgpd(
-                dist_dict[col], robjects.FloatVector(data)))
-        elif tuple(dist_dict[col].rclass)[0] == 'ecdf':
-            unif_df[col] = np.array(
-                dist_dict[col].ecdf(robjects.FloatVector(data)))
+        if hasattr(dist_dict[col], "pgpd"):
+            unif_df[col] = dist_dict[col].pgpd(data)
         else:
-            raise RuntimeError(
-                "Unrecognized distribution class {}".format(tuple(dist_dict[col].rclass)))
+            unif_df[col] = R_PY.ecdf(data)
 
     unif_df.clip(lower=1e-5, upper=0.99999, inplace=True)
     gauss_df = unif_df.apply(norm.ppf)
 
     return dist_dict, gauss_df
+
 
 def graphical_lasso(df: pd.DataFrame, m: int, rho: float):
     """
@@ -176,12 +155,8 @@ def graphical_lasso(df: pd.DataFrame, m: int, rho: float):
     assert df.shape[1] == m, (
         "Expected a DataFrame with {} columns, got {}".format(m, df.shape[1]))
 
-    f = glasso.glasso
-    cov = df.cov().values
-    rcov = robjects.r.matrix(cov, nrow=m, ncol=m)
-    res = f(rcov, rho=rho, penalize_diagonal=False)
-
-    return dict(zip(res.names, list(res)))['wi']
+    res = sklearn_graphical_lasso(df.cov().values, alpha=rho, tol=1e-2, max_iter=2000)
+    return np.linalg.inv(res[0])
 
 
 def gemini(df: pd.DataFrame,
@@ -223,15 +198,10 @@ def gemini(df: pd.DataFrame,
     GA = XTX / np.sqrt(np.outer(WA, WA))
     GB = XXT / np.sqrt(np.outer(WB, WB))
 
-    GAr = robjects.r.matrix(GA, nrow=m, ncol=m)
-    GBr = robjects.r.matrix(GB, nrow=f, ncol=f)
-    rA = glasso.glasso(GAr, rho=pA, penalize_diagonal=False)
-    rB = glasso.glasso(GBr, rho=pB, penalize_diagonal=False)
-
-    rA_dict = dict(zip(rA.names, list(rA)))
-    Arho = rA_dict['wi']
-    rB_dict = dict(zip(rB.names, list(rB)))
-    Brho = rB_dict['wi']
+    rA = sklearn_graphical_lasso(GA.cov().values, alpha=pA, tol=1e-2, max_iter=2000)
+    rB = sklearn_graphical_lasso(GB.cov().values, alpha=pB, tol=1e-2, max_iter=2000)
+    Arho = np.linalg.inv(rA[0])
+    Brho = np.linalg.inv(rB[0])
     fact = np.sum(np.multiply(df.values, df.values)) / n
 
     WA = np.diag(np.sqrt(n / WA))
@@ -240,6 +210,7 @@ def gemini(df: pd.DataFrame,
     B = np.sqrt(fact) * WB @ Brho @ WB
 
     return A, B
+
 
 def split_actuals_hist_future(actual_df, timesteps, in_sample=False):
     if in_sample:

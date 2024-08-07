@@ -111,6 +111,9 @@ class PlModel:
         seed : Optional (int or None)
             If not None, use this seed to draw random numbers.
 
+        seed : Optional (int or None)
+            If not None, use this seed to draw random numbers.
+
     """
 
     def __init__(self,
@@ -121,7 +124,8 @@ class PlModel:
                  forecast_resolution_in_minute: int = 60,
                  num_of_horizons: int = 24,
                  forecast_lead_time_in_hour: int = 12,
-                 use_gpd: bool = False, seed: Optional[int] = None) -> None:
+                 use_gpd: bool = False, seed: int|None = None) -> None:
+
         """
         GeminiModel classes can be instantiated by either giving a pair of
         dataframes with actual and forecasted historical values in a dictionary
@@ -142,7 +146,7 @@ class PlModel:
         # will be generated were issued
         self.forecast_issue_time = (
             self.scen_start_time - pd.Timedelta(self.forecast_lead_hours,
-                                                unit='H')
+                                                unit='h')
             )
 
         # calculate the close of the window for which scenarios will be made
@@ -186,10 +190,9 @@ class PlModel:
             # for each forecast issue time, find the actual values for the time
             # points for which the forecast were made
             hist_dev_dict = dict()
-            for issue_time, fcsts in hist_dfs['forecast'].groupby(
-                    'Issue_time'):
+            for issue_time, fcsts in hist_dfs['forecast'].groupby('Issue_time'):
                 fcst_start_time = issue_time + pd.Timedelta(
-                    self.forecast_lead_hours, unit='H')
+                    self.forecast_lead_hours, unit='h')
 
                 fcst_end_time = pd.Timedelta(self.forecast_resolution_in_minute
                                              * (self.num_of_horizons - 1),
@@ -296,20 +299,16 @@ class PlModel:
 
         """
         if self.num_of_assets == 1:
-            horizon_prec = graphical_lasso(self.gauss_df, self.num_of_horizons,
-                                           horizon_rho)
+            horizon_prec = graphical_lasso(self.gauss_df, self.num_of_horizons, horizon_rho)
             asset_prec = np.array([[1.0]])
 
         elif self.num_of_horizons == 1:
-            asset_prec = graphical_lasso(self.gauss_df, self.num_of_assets,
-                                         asset_rho)
+            asset_prec = graphical_lasso(self.gauss_df, self.num_of_assets, asset_rho)
             horizon_prec = np.array([[1.0]])
 
         else:
             asset_prec, horizon_prec = gemini(
-                self.gauss_df, self.num_of_assets, self.num_of_horizons,
-                asset_rho, horizon_rho
-                )
+                self.gauss_df, self.num_of_assets, self.num_of_horizons, asset_rho, horizon_rho)
 
         # compute covariance matrices
         asset_cov = np.linalg.inv(asset_prec)
@@ -431,23 +430,20 @@ class PlModel:
                               "that has not been fit yet!")
 
         if sqrt_cov is None:
-            sqrt_cov = np.kron(sqrtm(self.asset_cov.values).real,
-                               sqrtm(self.horizon_cov.values).real)
+            sqrt_cov = np.kron(sqrtm(self.asset_cov.values).real, sqrtm(self.horizon_cov.values).real)
 
         # generate random draws from a normal distribution and use the model
         # parameters to transform them into normalized scenario deviations
         set_seed(self)
-        arr = sqrt_cov @ np.random.randn(
-            len(self.asset_list) * self.num_of_horizons, nscen)
+        arr = sqrt_cov @ np.random.randn(len(self.asset_list) * self.num_of_horizons, nscen)
+
         if mu is not None:
             arr += mu
 
         scen_df = pd.DataFrame(
             data=arr.T, columns=pd.MultiIndex.from_tuples(
                 [(asset, horizon) for asset in self.asset_list
-                 for horizon in range(self.num_of_horizons)]
-                )
-            )
+                 for horizon in range(self.num_of_horizons)]))
 
         self.scen_gauss_df = scen_df.copy()
 
@@ -467,13 +463,11 @@ class PlModel:
             if self.marginal_ecdfs:
                 scen_df = pd.DataFrame({
                     col: qdist(self.marginal_ecdfs[col], u_mat[:, i])
-                    for i, col in enumerate(scen_df.columns)
-                    })
+                    for i, col in enumerate(scen_df.columns)})
             else:
                 scen_df = pd.DataFrame({
                     col: qdist(self.gpd_dict[col], u_mat[:, i])
-                    for i, col in enumerate(scen_df.columns)
-                    })
+                    for i, col in enumerate(scen_df.columns)})
 
         # if we have loaded forecasts for the scenario time points, add the
         # unnormalized deviations to the forecasts to produce scenario values
