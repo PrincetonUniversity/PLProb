@@ -119,6 +119,7 @@ class PlPredictor:
 
         self.cp_prob = dict()
         self.peak_hour_prob = dict()
+        self.seed = seed
 
         self.seed = seed
 
