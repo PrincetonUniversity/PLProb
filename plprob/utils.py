@@ -10,7 +10,7 @@ from scipy.stats import ecdf
 from sklearn.covariance import graphical_lasso as sklearn_graphical_lasso
 from scipy.stats import norm
 
-import R.univariate as R_PY
+import plprob.univariate as R_PY
 
 
 class ECDF:
