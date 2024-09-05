@@ -56,7 +56,7 @@ class PlPredictor:
             as a basis to generate scenarios.
         scenarios : Optional[Dict[pd.DataFrame]]
             The scenarios generated using this engine.
-        
+
         seed : Optional (int or None)
             If not None, use this seed to draw random numbers.
     """
@@ -68,7 +68,9 @@ class PlPredictor:
                  hist_cps: List[int], 
                  forecast_resolution_in_minute: int = 60,
                  num_of_horizons: int = 24,
-                 forecast_lead_time_in_hour: int = 12, seed: int|None = None) -> None:
+                 forecast_lead_time_in_hour: int = 12,
+                 threshold: float = -np.inf,
+                 alpha: float = 1.0,  seed: int|None = None) -> None:
 
         # check that the dataframes with actual and forecast values are in the
         # right format, get the names of the assets they contain values for
@@ -89,6 +91,9 @@ class PlPredictor:
         self.forecast_resolution_in_minute = forecast_resolution_in_minute
         self.num_of_horizons = num_of_horizons
         self.forecast_lead_hours = forecast_lead_time_in_hour
+
+        self.threshold = threshold
+        self.alpha = alpha
 
         # figure out when forecasts for the time period for which scenarios
         # will be generated were issued
@@ -119,8 +124,6 @@ class PlPredictor:
 
         self.cp_prob = dict()
         self.peak_hour_prob = dict()
-        self.seed = seed
-
         self.seed = seed
 
     def fit(self,
@@ -267,13 +270,18 @@ class PlPredictor:
             raise PlError(
                 "Generate scenarios before computing CP probability!")
         
-        # Compute probability of being new CP day
-        cp_bins = self.hist_cps + [np.inf]
-        if cp_bins[0] != 0:
+        # Compute probability of being new CP day 
+        bin_list = list(sorted(set([max(self.alpha*x,self.threshold) for x in self.hist_cps])))
+        cp_bins = bin_list + [np.inf]
+        if (len(self.hist_cps) == 0) and (self.threshold != float("-inf")):
+            cp_bins = [self.threshold] + cp_bins
+        if (cp_bins[0] > 0):
             cp_bins = [0] + cp_bins
         
-        cp_count = pd.cut(self.scenarios.max(axis=1), cp_bins, labels=list(range(len(cp_bins) - 2, -1, -1)))
-        self.cp_prob = dict(cp_count.groupby(cp_count, observed=False).count()[::-1].cumsum() / len(cp_count))
+        cp_count = pd.cut(self.scenarios.max(axis=1), 
+                           cp_bins, 
+                           labels=list(range(len(cp_bins) - 2, -1, -1)))
+        self.cp_prob = dict(cp_count.groupby(cp_count).count()[::-1].cumsum() / len(cp_count))
         
         # Compute probabilities of peak hour
         peak_hour = self.scenarios.droplevel(axis=1,level=0).idxmax(axis=1)
@@ -291,7 +299,9 @@ class ConPlPredictor:
                  hist_cps: List[int], 
                  forecast_resolution_in_minute: int = 60,
                  num_of_horizons: int = 24,
-                 forecast_lead_time_in_hour: int = 12, seed: int|None = None) -> None:
+                 forecast_lead_time_in_hour: int = 12,
+                 threshold: float = -np.inf,
+                 alpha: float = 1.0,  seed: int|None = None) -> None:
 
         # check that the dataframes with actual and forecast values are in the
         # right format, get the names of the assets they contain values for
@@ -312,6 +322,9 @@ class ConPlPredictor:
         self.num_of_cps = num_of_cps
         self.hist_cps = [cp for cp in hist_cps]
 
+        self.threshold = threshold
+        self.alpha = alpha
+
         self.model = None
         self.cond_model = None
 
@@ -321,7 +334,10 @@ class ConPlPredictor:
 
         # figure out when forecasts for the time period for which scenarios
         # will be generated were issued
-        self.forecast_issue_time = (self.scen_start_time - pd.Timedelta(self.forecast_lead_hours,unit='h'))
+        self.forecast_issue_time = (
+            self.scen_start_time - pd.Timedelta(self.forecast_lead_hours,
+                                                unit='h')
+            )
 
         # calculate the close of the window for which scenarios will be made
         self.scen_end_time = (
@@ -539,14 +555,17 @@ class ConPlPredictor:
                 "Generate scenarios before computing CP probability!")
         
         # Compute probability of being new CP day
-        cp_bins = self.hist_cps + [np.inf]
-        if cp_bins[0] != 0:
+        bin_list = list(sorted(set([max(self.alpha*x,self.threshold) for x in self.hist_cps])))
+        cp_bins = bin_list + [np.inf]
+        if (len(self.hist_cps) == 0) and (self.threshold != float("-inf")):
+            cp_bins = [self.threshold] + cp_bins
+        if (cp_bins[0] > 0):
             cp_bins = [0] + cp_bins
         
         cp_count = pd.cut(self.cond_scenarios.max(axis=1), 
                            cp_bins, 
                            labels=list(range(len(cp_bins) - 2, -1, -1)))
-        self.cp_prob = dict(cp_count.groupby(cp_count, observed=False).count()[::-1].cumsum() / len(cp_count))
+        self.cp_prob = dict(cp_count.groupby(cp_count).count()[::-1].cumsum() / len(cp_count))
         
         # Compute probabilities of peak hour
         peak_hour = self.cond_scenarios.droplevel(axis=1,level=0).idxmax(axis=1)
